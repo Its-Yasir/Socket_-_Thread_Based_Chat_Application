@@ -1,33 +1,60 @@
 import pyaudio
 import wave
-from array import array
-from struct import pack
+import threading
 
+is_recording = False
+frames = []
+p = None
+stream = None
 
-def record(file):
-    CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 2
-    RATE = 44100
-    r_Time=10
+def start():
+    global is_recording, frames, p, stream
     p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-    print(" Recording Started...!!")
-    frames=[]
-    for i in range (0, int(RATE/CHUNK * r_Time)):
-        data= stream.read(CHUNK)
-        frames.append(data)
+    stream = p.open(format=pyaudio.paInt16, channels=2, rate=44100, input=True, frames_per_buffer=1024)
+    frames = []
+    is_recording = True
+    
+    def record_loop():
+        while is_recording:
+            try:
+                frames.append(stream.read(1024, exception_on_overflow=False))
+            except Exception:
+                pass
+                
+    threading.Thread(target=record_loop, daemon=True).start()
 
-    print(" Recording ended...!!")
+def stop():
+    global is_recording, stream, p, frames
+    is_recording = False
+    
     stream.stop_stream()
     stream.close()
     p.terminate()
 
-    wt=wave.open(file, "wb")
-    wt.setsampwidth(p.get_sample_size(FORMAT))
-    wt.setnchannels(CHANNELS)
-    wt.setframerate(RATE)
+    filename = "recordings/voice.wav"
+    
+    wt = wave.open(filename, "wb")
+    wt.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+    wt.setnchannels(2)
+    wt.setframerate(44100)
     wt.writeframes(b"".join(frames))
     wt.close()
+    
+    return filename
 
-record("recording.wav")
+def play_wav(filepath):
+    def _play():
+        wf = wave.open(filepath, 'rb')
+        p2 = pyaudio.PyAudio()
+        s2 = p2.open(format=p2.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True)
+        data = wf.readframes(1024)
+        while data:
+            s2.write(data)
+            data = wf.readframes(1024)
+        s2.stop_stream()
+        s2.close()
+        p2.terminate()
+    threading.Thread(target=_play, daemon=True).start()

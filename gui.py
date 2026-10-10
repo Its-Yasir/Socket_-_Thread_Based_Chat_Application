@@ -569,10 +569,14 @@ class MainPage:
             ("Video",    self._on_video),
             ("Settings", self._on_settings),
         ]
+        self._voice_btn = None
         for label_text, cmd in toolbar_btns:
-            _btn(toolbar, label_text, cmd,
-                 bg=CLR["surface2"], fg=CLR["fg_dim"],
-                 font=norm10, pad=(8, 4)).pack(side="left", padx=2, pady=4)
+            btn = _btn(toolbar, label_text, cmd,
+                       bg=CLR["surface2"], fg=CLR["fg_dim"],
+                       font=norm10, pad=(8, 4))
+            btn.pack(side="left", padx=2, pady=4)
+            if label_text == "Voice":
+                self._voice_btn = btn
 
         # ----- Message area
         msg_frame = tk.Frame(panel, bg=CLR["bg"])
@@ -963,12 +967,7 @@ class MainPage:
         )
 
     def _on_voice(self):
-        messagebox.showinfo(
-            "Voice chat",
-            "Voice chat is not yet available in this build.\n"
-            "Connect a WebRTC relay to enable it.",
-            parent=self.app.root,
-        )
+        _VoiceDialog(self.app.root, self.app)
 
     def _on_video(self):
         messagebox.showinfo(
@@ -994,6 +993,85 @@ class MainPage:
         if not self._room_entry.get():
             self._room_entry.insert(0, "room-name")
             self._room_entry.config(fg=CLR["fg_dim"])
+
+
+# ---------------------------------------------------------------------------
+# Voice dialog
+# ---------------------------------------------------------------------------
+
+class _VoiceDialog:
+    def __init__(self, parent, app: App):
+        self.app = app
+        self.dlg = tk.Toplevel(parent)
+        self.dlg.title("Voice Recorder")
+        self.dlg.config(bg=CLR["surface"])
+        self.dlg.resizable(False, False)
+        self.dlg.transient(parent)
+        self.dlg.grab_set()
+        self.dlg.focus_set()
+
+        bold12 = tkfont.Font(family=FONT_FAMILY, size=12, weight="bold")
+        norm11  = tkfont.Font(family=FONT_FAMILY, size=11)
+
+        tk.Label(self.dlg, text="Voice Recorder", bg=CLR["surface"], fg=CLR["fg"], font=bold12).pack(pady=10)
+
+        self.status_var = tk.StringVar(value="Ready")
+        tk.Label(self.dlg, textvariable=self.status_var, bg=CLR["surface"], fg=CLR["fg_dim"]).pack(pady=5)
+
+        btn_frame = tk.Frame(self.dlg, bg=CLR["surface"])
+        btn_frame.pack(pady=10, padx=20)
+
+        self.start_btn = _btn(btn_frame, "Start", self.start_rec, font=norm11)
+        self.start_btn.grid(row=0, column=0, padx=5)
+
+        self.stop_btn = _btn(btn_frame, "Stop", self.stop_rec, font=norm11, state="disabled")
+        self.stop_btn.grid(row=0, column=1, padx=5)
+
+        self.play_btn = _btn(btn_frame, "Play", self.play_rec, font=norm11, state="disabled")
+        self.play_btn.grid(row=0, column=2, padx=5)
+
+        _btn(btn_frame, "Exit", self.exit_dialog, font=norm11).grid(row=0, column=3, padx=5)
+
+        self.filepath = None
+        self.dlg.protocol("WM_DELETE_WINDOW", self.exit_dialog)
+
+        # Centre on parent
+        self.dlg.update_idletasks()
+        pw = parent.winfo_width()
+        ph = parent.winfo_height()
+        px = parent.winfo_rootx()
+        py = parent.winfo_rooty()
+        dw = self.dlg.winfo_width()
+        dh = self.dlg.winfo_height()
+        self.dlg.geometry(f"+{px + (pw - dw)//2}+{py + (ph - dh)//2}")
+
+    def start_rec(self):
+        import audioRecord
+        audioRecord.start()
+        self.status_var.set("Recording...")
+        self.start_btn.config(state="disabled")
+        self.stop_btn.config(state="normal")
+        self.play_btn.config(state="disabled")
+
+    def stop_rec(self):
+        import audioRecord
+        self.filepath = audioRecord.stop()
+        self.status_var.set("Saved!")
+        self.start_btn.config(state="normal")
+        self.stop_btn.config(state="disabled")
+        self.play_btn.config(state="normal")
+
+    def play_rec(self):
+        if self.filepath:
+            import audioRecord
+            audioRecord.play_wav(self.filepath)
+            self.status_var.set("Playing...")
+
+    def exit_dialog(self):
+        import audioRecord
+        if audioRecord.is_recording:
+            audioRecord.stop()
+        self.dlg.destroy()
 
 
 # ---------------------------------------------------------------------------
