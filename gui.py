@@ -213,6 +213,33 @@ class App:
                 "Error: " + (parts[1] if len(parts) > 1 else ""),
                 error=True
             )
+        elif cmd == "FILESTART":
+            sender = parts[1] if len(parts) > 1 else ""
+            tid = parts[2] if len(parts) > 2 else ""
+            filename = parts[3] if len(parts) > 3 else ""
+            size = parts[4] if len(parts) > 4 else "0"
+            import fileTransfer
+            fileTransfer.handle_file_start(sender, tid, filename, size, self.client)
+            self.main_page.handle_info(f"Incoming file {filename} from {sender}...")
+        elif cmd == "FILECHUNK":
+            sender = parts[1] if len(parts) > 1 else ""
+            tid = parts[2] if len(parts) > 2 else ""
+            b64_data = parts[3] if len(parts) > 3 else ""
+            import fileTransfer
+            fileTransfer.handle_file_chunk(sender, tid, b64_data, self.client)
+        elif cmd == "FILEEND":
+            sender = parts[1] if len(parts) > 1 else ""
+            tid = parts[2] if len(parts) > 2 else ""
+            import fileTransfer
+            fileTransfer.handle_file_end(sender, tid, self.client)
+        elif cmd == "@FILESENT":
+            tid = parts[1] if len(parts) > 1 else ""
+            filename = parts[2] if len(parts) > 2 else ""
+            self.main_page.handle_info(f"Upload complete: {filename}")
+        elif cmd == "@FILEFAILED":
+            tid = parts[1] if len(parts) > 1 else ""
+            reason = parts[2] if len(parts) > 2 else ""
+            self.main_page.handle_info(f"Upload failed: {reason}", error=True)
         elif cmd == "DISCONNECTED":
             self.main_page.handle_info("Disconnected from server.", error=True)
             self.client = None
@@ -959,23 +986,27 @@ class MainPage:
     # ------------------------------------------------------------------
 
     def _on_file(self):
-        messagebox.showinfo(
-            "File sharing",
-            "File sharing is not yet available in this build.\n"
-            "Connect a file-transfer server to enable it.",
-            parent=self.app.root,
-        )
+        from tkinter import filedialog
+        filepath = filedialog.askopenfilename(parent=self.app.root)
+        if not filepath:
+            return
+            
+        target = self._current_chat
+        if target.startswith("@"):
+            target = target[1:]
+            
+        if self.app.client:
+            import fileTransfer
+            fileTransfer.send_file(self.app.client, target, filepath)
+            self.handle_info(f"Uploading file {filepath} to {target}...")
+        else:
+            self.handle_info("Not connected.", error=True)
 
     def _on_voice(self):
         _VoiceDialog(self.app.root, self.app)
 
     def _on_video(self):
-        messagebox.showinfo(
-            "Video chat",
-            "Video chat is not yet available in this build.\n"
-            "Connect a WebRTC relay to enable it.",
-            parent=self.app.root,
-        )
+        _VideoDialog(self.app.root, self.app)
 
     def _on_settings(self):
         _SettingsDialog(self.app.root, self.app)
@@ -1071,6 +1102,84 @@ class _VoiceDialog:
         import audioRecord
         if audioRecord.is_recording:
             audioRecord.stop()
+        self.dlg.destroy()
+
+
+# ---------------------------------------------------------------------------
+# Video dialog
+# ---------------------------------------------------------------------------
+
+class _VideoDialog:
+    def __init__(self, parent, app: App):
+        self.app = app
+        self.dlg = tk.Toplevel(parent)
+        self.dlg.title("Video Recorder")
+        self.dlg.config(bg=CLR["surface"])
+        self.dlg.resizable(False, False)
+        self.dlg.transient(parent)
+        self.dlg.grab_set()
+        self.dlg.focus_set()
+
+        bold12 = tkfont.Font(family=FONT_FAMILY, size=12, weight="bold")
+        norm11  = tkfont.Font(family=FONT_FAMILY, size=11)
+
+        tk.Label(self.dlg, text="Video Recorder", bg=CLR["surface"], fg=CLR["fg"], font=bold12).pack(pady=10)
+
+        self.status_var = tk.StringVar(value="Ready")
+        tk.Label(self.dlg, textvariable=self.status_var, bg=CLR["surface"], fg=CLR["fg_dim"]).pack(pady=5)
+
+        btn_frame = tk.Frame(self.dlg, bg=CLR["surface"])
+        btn_frame.pack(pady=10, padx=20)
+
+        self.start_btn = _btn(btn_frame, "Start", self.start_rec, font=norm11)
+        self.start_btn.grid(row=0, column=0, padx=5)
+
+        self.stop_btn = _btn(btn_frame, "Stop", self.stop_rec, font=norm11, state="disabled")
+        self.stop_btn.grid(row=0, column=1, padx=5)
+
+        self.play_btn = _btn(btn_frame, "Play", self.play_rec, font=norm11, state="disabled")
+        self.play_btn.grid(row=0, column=2, padx=5)
+
+        _btn(btn_frame, "Exit", self.exit_dialog, font=norm11).grid(row=0, column=3, padx=5)
+
+        self.filepath = None
+        self.dlg.protocol("WM_DELETE_WINDOW", self.exit_dialog)
+
+        # Centre on parent
+        self.dlg.update_idletasks()
+        pw = parent.winfo_width()
+        ph = parent.winfo_height()
+        px = parent.winfo_rootx()
+        py = parent.winfo_rooty()
+        dw = self.dlg.winfo_width()
+        dh = self.dlg.winfo_height()
+        self.dlg.geometry(f"+{px + (pw - dw)//2}+{py + (ph - dh)//2}")
+
+    def start_rec(self):
+        import videoRecord
+        videoRecord.start()
+        self.status_var.set("Recording...")
+        self.start_btn.config(state="disabled")
+        self.stop_btn.config(state="normal")
+
+    def stop_rec(self):
+        import videoRecord
+        self.filepath = videoRecord.stop()
+        self.status_var.set("Saved!")
+        self.start_btn.config(state="normal")
+        self.stop_btn.config(state="disabled")
+        self.play_btn.config(state="normal")
+
+    def play_rec(self):
+        if self.filepath:
+            import videoRecord
+            videoRecord.play_video(self.filepath)
+            self.status_var.set("Playing...")
+
+    def exit_dialog(self):
+        import videoRecord
+        if videoRecord.is_recording:
+            videoRecord.stop()
         self.dlg.destroy()
 
 
