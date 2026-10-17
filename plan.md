@@ -1,11 +1,11 @@
 # Project Documentation, Report & Presentation Master Plan
 
-Jeo 
-Saim
+This project is made by Saim
 
 This document provides a comprehensive, step-by-step master plan to prepare the **Final Project Report** and the **Final Project Presentation/Demo** for the **Real-Time Multi-User Socket- and Thread-Based Chat Application**.
 
 It details exact guidelines on:
+
 - **Files, Their Use, and Internal Workings**: Complete technical breakdown of every single file in the project.
 - **Libraries and Their Roles**: Detailed analysis of standard and external dependencies.
 - **Important Functions, Parameters, and Return Types**: Complete signatures and operational explanations for all core functions.
@@ -13,27 +13,30 @@ It details exact guidelines on:
 - **System Architecture Diagrams & Visual Flowcharts**: Placement and contents of architectural visuals.
 - **Presentation & Live Demo Script**: Exact script and viva defense cheat sheet for examiners.
 
-*(Note: All source code screenshots have been excluded in favor of actual working GUI screenshots, architectural diagrams, and comprehensive technical depth).*
+_(Note: All source code screenshots have been excluded in favor of actual working GUI screenshots, architectural diagrams, and comprehensive technical depth)._
 
 ---
 
 ## Part 1: Project Overview & Rubric Alignment
 
 ### 1.1 Project Summary
+
 A multi-threaded client-server communication suite developed using standard Python network libraries (`socket`, `threading`, `queue`) and modular multimedia utilities (`pyaudio`, `opencv-python`). It features:
+
 - **TCP Stream Framing**: Guaranteed reliability for text messaging, channel rooms, file transmissions, and call signaling.
 - **Direct UDP Peer-to-Peer Streaming**: High-throughput, low-latency live audio and video streaming directly between clients.
 - **Strict Separation of Concerns**: Monolithic styling and UI thread confinement in `gui.py`, with decoupled, purely procedural functional modules.
 
 ### 1.2 Evaluation Mapping
-| Feature / Requirement | Module / Implementation | Marks Target |
-|---|---|---|
-| **Core Client-Server Communication** | `server.py`, `protocol.py`, `config.py` | 4 Marks |
-| **Group & Private Chatting** | `roomManager.py`, `clientRegistry.py`, `serverHandlers.py`, `gui.py` | 3 Marks |
-| **File & Media Transfers** | `fileTransfer.py`, `fileReceive.py`, `audioRecord.py`, `videoRecord.py` | 2 Marks |
-| **Multi-threading & Network Efficiency** | Worker threads, locks, UDP audio/video (`audioCall.py`, `videoCall.py`, `callManager.py`) | 3 Marks |
-| **Structure & Documentation** | Modular flat files, report, diagrams, presentation | 2 Marks |
-| **User Interface (GUI)** | Dark-themed, responsive Tkinter desktop client (`gui.py`) | 1 Mark |
+
+| Feature / Requirement                    | Module / Implementation                                                                   | Marks Target |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ------------ |
+| **Core Client-Server Communication**     | `server.py`, `protocol.py`, `config.py`                                                   | 4 Marks      |
+| **Group & Private Chatting**             | `roomManager.py`, `clientRegistry.py`, `serverHandlers.py`, `gui.py`                      | 3 Marks      |
+| **File & Media Transfers**               | `fileTransfer.py`, `fileReceive.py`, `audioRecord.py`, `videoRecord.py`                   | 2 Marks      |
+| **Multi-threading & Network Efficiency** | Worker threads, locks, UDP audio/video (`audioCall.py`, `videoCall.py`, `callManager.py`) | 3 Marks      |
+| **Structure & Documentation**            | Modular flat files, report, diagrams, presentation                                        | 2 Marks      |
+| **User Interface (GUI)**                 | Dark-themed, responsive Tkinter desktop client (`gui.py`)                                 | 1 Mark       |
 
 ---
 
@@ -41,52 +44,54 @@ A multi-threaded client-server communication suite developed using standard Pyth
 
 ### 2.1 File Catalog: Workings & Responsibilities
 
-| # | File Name | Role / Side | Detailed Workings & Responsibilities |
-|---|---|---|---|
-| 1 | `config.py` | Shared (Server & Client) | Central repository of configuration constants (server IP, port `5000`, 32 KB chunk size, 50 MB max file size, connection timeouts). Prevents magic numbers. |
-| 2 | `protocol.py` | Shared (Server & Client) | Implements the `Connection` class. Manages newline framing (`\n`), thread-safe socket writing via `threading.Lock`, and clean shutdown with `socket.SHUT_RDWR`. |
-| 3 | `clientRegistry.py` | Server Side | Thread-safe user registry (`username -> Connection`). Protects user state with a mutex lock and takes snapshot copies of active connections to prevent deadlocks during broadcasts. |
-| 4 | `roomManager.py` | Server Side | Thread-safe group chat directory (`room_name -> set(usernames)`). Handles creation, joining, leaving, empty room deletion, and automatic multi-room purging on disconnect. |
-| 5 | `serverHandlers.py` | Server Side | Command processing engine. Sanitizes inputs, validates room memberships, routes private messages, forwards Base64 file chunks statelessly, and brokers call signaling. |
-| 6 | `server.py` | Server Side | Central daemon process. Binds to `0.0.0.0:5000` with `SO_REUSEADDR`, runs the infinite accept loop, spawns per-client worker daemon threads, and guarantees disconnect cleanup via `try/finally`. |
-| 7 | `fileTransfer.py` | Client Side | Non-blocking file transmitter. Runs on a daemon thread, reads files in 32 KB binary chunks, Base64-encodes them, streams `FILESTART`/`FILECHUNK`/`FILEEND` over TCP, and reports progress to `client.q`. |
-| 8 | `fileReceive.py` | Client Side | File reassembly handler. Listens for `FILESTART`, creates output files inside `downloads/`, decodes incoming Base64 chunks to binary, and notifies the UI when the file is saved. |
-| 9 | `audioRecord.py` | Client Side | Procedural voice message recorder. Continuously pulls microphone audio frames using PyAudio in a background thread, compiles frames into a 44.1 kHz WAV file in `recordings/`, and plays WAV files asynchronously. |
-| 10 | `videoRecord.py` | Client Side | Procedural webcam video recorder. Captures hardware camera frames at ~20 FPS using OpenCV, encodes them into `recordings/output_video.avi` (XVID), and provides non-blocking playback in an OpenCV window. |
-| 11 | `audioCall.py` | Client Side | Real-time peer-to-peer audio calling. Dynamically allocates an ephemeral UDP socket, opens 16 kHz PyAudio input/output streams, and runs dual background loops to send and receive UDP audio directly between peers. |
-| 12 | `videoCall.py` | Client Side | Real-time peer-to-peer video calling. Dynamically allocates an ephemeral UDP socket, captures camera frames, downscales to 320x240, compresses as JPEG (quality 40), and streams UDP payloads directly to the peer. |
-| 13 | `callManager.py` | Client Side | Signaling state machine for calls. Sends `CALL`, receives `INCOMING`, sends `ACCEPT`/`REJECT`, and orchestrates the automatic startup and teardown of media threads in `audioCall` and `videoCall`. |
-| 14 | `gui.py` | Client Side | Monolithic desktop interface. Houses the dark-mode Tkinter GUI, `ChatClient` network reader, the 100 ms polling queue bridge (`_poll`), 3-column layout, and dialog modals. |
+| #   | File Name           | Role / Side              | Detailed Workings & Responsibilities                                                                                                                                                                                 |
+| --- | ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `config.py`         | Shared (Server & Client) | Central repository of configuration constants (server IP, port `5000`, 32 KB chunk size, 50 MB max file size, connection timeouts). Prevents magic numbers.                                                          |
+| 2   | `protocol.py`       | Shared (Server & Client) | Implements the `Connection` class. Manages newline framing (`\n`), thread-safe socket writing via `threading.Lock`, and clean shutdown with `socket.SHUT_RDWR`.                                                      |
+| 3   | `clientRegistry.py` | Server Side              | Thread-safe user registry (`username -> Connection`). Protects user state with a mutex lock and takes snapshot copies of active connections to prevent deadlocks during broadcasts.                                  |
+| 4   | `roomManager.py`    | Server Side              | Thread-safe group chat directory (`room_name -> set(usernames)`). Handles creation, joining, leaving, empty room deletion, and automatic multi-room purging on disconnect.                                           |
+| 5   | `serverHandlers.py` | Server Side              | Command processing engine. Sanitizes inputs, validates room memberships, routes private messages, forwards Base64 file chunks statelessly, and brokers call signaling.                                               |
+| 6   | `server.py`         | Server Side              | Central daemon process. Binds to `0.0.0.0:5000` with `SO_REUSEADDR`, runs the infinite accept loop, spawns per-client worker daemon threads, and guarantees disconnect cleanup via `try/finally`.                    |
+| 7   | `fileTransfer.py`   | Client Side              | Non-blocking file transmitter. Runs on a daemon thread, reads files in 32 KB binary chunks, Base64-encodes them, streams `FILESTART`/`FILECHUNK`/`FILEEND` over TCP, and reports progress to `client.q`.             |
+| 8   | `fileReceive.py`    | Client Side              | File reassembly handler. Listens for `FILESTART`, creates output files inside `downloads/`, decodes incoming Base64 chunks to binary, and notifies the UI when the file is saved.                                    |
+| 9   | `audioRecord.py`    | Client Side              | Procedural voice message recorder. Continuously pulls microphone audio frames using PyAudio in a background thread, compiles frames into a 44.1 kHz WAV file in `recordings/`, and plays WAV files asynchronously.   |
+| 10  | `videoRecord.py`    | Client Side              | Procedural webcam video recorder. Captures hardware camera frames at ~20 FPS using OpenCV, encodes them into `recordings/output_video.avi` (XVID), and provides non-blocking playback in an OpenCV window.           |
+| 11  | `audioCall.py`      | Client Side              | Real-time peer-to-peer audio calling. Dynamically allocates an ephemeral UDP socket, opens 16 kHz PyAudio input/output streams, and runs dual background loops to send and receive UDP audio directly between peers. |
+| 12  | `videoCall.py`      | Client Side              | Real-time peer-to-peer video calling. Dynamically allocates an ephemeral UDP socket, captures camera frames, downscales to 320x240, compresses as JPEG (quality 40), and streams UDP payloads directly to the peer.  |
+| 13  | `callManager.py`    | Client Side              | Signaling state machine for calls. Sends `CALL`, receives `INCOMING`, sends `ACCEPT`/`REJECT`, and orchestrates the automatic startup and teardown of media threads in `audioCall` and `videoCall`.                  |
+| 14  | `gui.py`            | Client Side              | Monolithic desktop interface. Houses the dark-mode Tkinter GUI, `ChatClient` network reader, the 100 ms polling queue bridge (`_poll`), 3-column layout, and dialog modals.                                          |
 
 ---
 
 ### 2.2 Libraries Used & Their Exact Purpose
 
-| Library / Module | Source | Purpose & Usage in Project |
-|---|---|---|
-| `socket` | Python Standard Library | Low-level networking. Creates TCP streaming sockets (`SOCK_STREAM`) for reliable text/files/signaling, and UDP datagram sockets (`SOCK_DGRAM`) for live low-latency calling. |
-| `threading` | Python Standard Library | Concurrency management. Spawns non-blocking daemon worker threads for server clients, file reading, audio/video recording, UDP streaming, and uses `Lock` for mutex protection. |
-| `queue` | Python Standard Library | Thread-safe FIFO communication. Acts as the queue bridge transferring incoming network lines from background reader threads to the foreground Tkinter UI thread safely. |
-| `tkinter` | Python Standard Library | Graphical User Interface. Provides window containers, frames, buttons, scrollable text areas, entries, listboxes, dialogs, and the event-driven `root.mainloop()`. |
-| `base64` | Python Standard Library | Data encoding. Converts binary file chunks into ASCII-safe Base64 strings so they can be framed safely within standard newline-delimited TCP text streams. |
-| `os` | Python Standard Library | Operating system interaction. Checks file existence, calculates file sizes (`os.path.getsize`), extracts base filenames, and creates `downloads/` and `recordings/` directories. |
-| `wave` | Python Standard Library | Audio file formatting. Reads and writes standard RIFF WAV headers, sample rates (44100 Hz), channels (stereo), and raw PCM audio frames. |
-| `time` | Python Standard Library | Timing and pacing. Regulates frame rates in video recording (~20 FPS via `time.sleep`) and timestamps events. |
-| `pyaudio` | Third-Party (`pip install pyaudio`) | PortAudio wrapper. Interfaces directly with hardware audio sound cards for microphone capture (`input=True`) and speaker playback (`output=True`) in both recording and live UDP calls. |
-| `opencv-python` (`cv2`) | Third-Party (`pip install opencv-python`) | Computer vision. Captures live video from webcams (`VideoCapture`), writes video clips (`VideoWriter`), downscales images, encodes/decodes JPEG buffers, and renders playback windows. |
-| `numpy` | Third-Party (`opencv` dependency) | Numerical arrays. Converts incoming raw UDP byte buffers into memory-contiguous image arrays (`np.frombuffer`) for real-time OpenCV decoding. |
+| Library / Module        | Source                                    | Purpose & Usage in Project                                                                                                                                                              |
+| ----------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `socket`                | Python Standard Library                   | Low-level networking. Creates TCP streaming sockets (`SOCK_STREAM`) for reliable text/files/signaling, and UDP datagram sockets (`SOCK_DGRAM`) for live low-latency calling.            |
+| `threading`             | Python Standard Library                   | Concurrency management. Spawns non-blocking daemon worker threads for server clients, file reading, audio/video recording, UDP streaming, and uses `Lock` for mutex protection.         |
+| `queue`                 | Python Standard Library                   | Thread-safe FIFO communication. Acts as the queue bridge transferring incoming network lines from background reader threads to the foreground Tkinter UI thread safely.                 |
+| `tkinter`               | Python Standard Library                   | Graphical User Interface. Provides window containers, frames, buttons, scrollable text areas, entries, listboxes, dialogs, and the event-driven `root.mainloop()`.                      |
+| `base64`                | Python Standard Library                   | Data encoding. Converts binary file chunks into ASCII-safe Base64 strings so they can be framed safely within standard newline-delimited TCP text streams.                              |
+| `os`                    | Python Standard Library                   | Operating system interaction. Checks file existence, calculates file sizes (`os.path.getsize`), extracts base filenames, and creates `downloads/` and `recordings/` directories.        |
+| `wave`                  | Python Standard Library                   | Audio file formatting. Reads and writes standard RIFF WAV headers, sample rates (44100 Hz), channels (stereo), and raw PCM audio frames.                                                |
+| `time`                  | Python Standard Library                   | Timing and pacing. Regulates frame rates in video recording (~20 FPS via `time.sleep`) and timestamps events.                                                                           |
+| `pyaudio`               | Third-Party (`pip install pyaudio`)       | PortAudio wrapper. Interfaces directly with hardware audio sound cards for microphone capture (`input=True`) and speaker playback (`output=True`) in both recording and live UDP calls. |
+| `opencv-python` (`cv2`) | Third-Party (`pip install opencv-python`) | Computer vision. Captures live video from webcams (`VideoCapture`), writes video clips (`VideoWriter`), downscales images, encodes/decodes JPEG buffers, and renders playback windows.  |
+| `numpy`                 | Third-Party (`opencv` dependency)         | Numerical arrays. Converts incoming raw UDP byte buffers into memory-contiguous image arrays (`np.frombuffer`) for real-time OpenCV decoding.                                           |
 
 ---
 
 ### 2.3 Core Functions: Signatures, Parameters & Types
 
 #### 1. Transport & Connection (`protocol.py`)
+
 - `Connection.__init__(self, sock: socket.socket, addr: tuple)`: Wraps raw client socket with reader file and mutex lock.
 - `Connection.send(self, line: str) -> None`: Thread-safe line transmission. Appends `\n`, encodes UTF-8, and writes with `sock.sendall()`.
 - `Connection.readline(self) -> str`: Reads one `\n`-terminated UTF-8 line. Returns empty string on disconnect.
 - `Connection.close(self) -> None`: Performs socket `shutdown(SHUT_RDWR)` followed by `close()`.
 
 #### 2. User & Room Directories (`clientRegistry.py`, `roomManager.py`)
+
 - `clientRegistry.add_client(username: str, conn: Connection) -> bool`: Inserts user under lock. Returns `False` if name taken.
 - `clientRegistry.remove_client(username: str) -> None`: Deletes user under lock.
 - `clientRegistry.broadcast(line: str, sender: str = None) -> None`: Takes snapshot copy of clients under lock, then transmits `line` to all non-sender clients.
@@ -95,6 +100,7 @@ A multi-threaded client-server communication suite developed using standard Pyth
 - `roomManager.remove_user_from_all(username: str) -> None`: Purges a user from all rooms simultaneously when disconnecting.
 
 #### 3. Server Handlers (`serverHandlers.py`)
+
 - `handle_login(conn: Connection, parts: list[str]) -> str | None`: Validates username, checks duplicates, registers user, and triggers `USERS` broadcast.
 - `handle_msg(conn: Connection, parts: list[str]) -> None`: Routes room message to all members in that room.
 - `handle_pm(conn: Connection, parts: list[str]) -> None`: Routes 1-to-1 private message directly to recipient or returns offline error.
@@ -102,6 +108,7 @@ A multi-threaded client-server communication suite developed using standard Pyth
 - `handle_call(conn: Connection, parts: list[str]) -> None`: Extracts caller IP (`conn.addr[0]`), appends to parameters, and routes `INCOMING` to callee.
 
 #### 4. File Transfers (`fileTransfer.py`, `fileReceive.py`)
+
 - `fileTransfer.send_file(client: ChatClient, target: str, filepath: str) -> None`: Spawns daemon thread to stream file.
 - `fileTransfer.send_file_thread(client: ChatClient, target: str, filepath: str) -> None`: Reads 32 KB binary chunks, Base64 encodes, sends `FILECHUNK` lines, sends `FILEEND`, and updates `client.q`.
 - `fileReceive.handle_file_start(sender: str, tid: str, filename: str, size: str, client: ChatClient) -> None`: Opens output stream in `downloads/`.
@@ -109,6 +116,7 @@ A multi-threaded client-server communication suite developed using standard Pyth
 - `fileReceive.handle_file_end(sender: str, tid: str, client: ChatClient) -> None`: Closes file stream and notifies UI chat of success.
 
 #### 5. Audio & Video Recording (`audioRecord.py`, `videoRecord.py`)
+
 - `audioRecord.start() -> None`: Initializes PyAudio stream (44.1 kHz, stereo) and starts background recording thread.
 - `audioRecord.stop() -> str`: Halts recording, compiles raw PCM frames into `recordings/voice.wav`, and returns file path.
 - `audioRecord.play_wav(filepath: str) -> None`: Spawns daemon thread to read and push WAV frames to speakers.
@@ -117,6 +125,7 @@ A multi-threaded client-server communication suite developed using standard Pyth
 - `videoRecord.play_video(filepath: str) -> None`: Spawns daemon thread to render video frames in OpenCV window.
 
 #### 6. Real-Time Calling (`audioCall.py`, `videoCall.py`, `callManager.py`)
+
 - `audioCall.get_port() -> int`: Binds UDP socket to port `0` and returns the ephemeral port assigned by the OS.
 - `audioCall.start(peer_ip: str, peer_port: int) -> None`: Opens mic/speaker PyAudio streams (16 kHz, mono) and starts UDP send/recv loops.
 - `audioCall.stop() -> None`: Closes audio streams and UDP socket.
@@ -128,6 +137,7 @@ A multi-threaded client-server communication suite developed using standard Pyth
 - `callManager.end_call(client: ChatClient) -> None`: Sends `ENDCALL` over TCP and halts local audio/video media threads.
 
 #### 7. GUI Core & Polling (`gui.py`)
+
 - `ChatClient.connect(self, host: str, port: int, timeout: float = 5.0) -> None`: Connects TCP socket, opens UTF-8 reader, and starts background thread.
 - `ChatClient._reader(self) -> None`: Continuous loop reading lines and pushing them into `self.q`.
 - `App._poll(self) -> None`: Scheduled every 100 ms via `root.after()`. Drains `client.q` and passes each line to `_dispatch(line)`.
@@ -142,6 +152,7 @@ When assembling your report document (Word/PDF), format each chapter following t
 ---
 
 ### CHAPTER 1: Introduction & System Objectives
+
 - **1.1 Background**: Problem statement of real-time communication across local area networks (LAN). Comparison of centralized client-server architectures versus peer-to-peer (P2P) topologies.
 - **1.2 Core Objectives**:
   - Implement a scalable TCP server handling 3+ concurrent clients simultaneously without blocking.
@@ -154,29 +165,33 @@ When assembling your report document (Word/PDF), format each chapter following t
 ---
 
 ### CHAPTER 2: System Architecture & Network Protocols
+
 - **2.1 Architectural Overview**:
+
   > **[DIAGRAM PLACEHOLDER 1: High-Level System Architecture]**
-  > *Insert a clear visual diagram illustrating:*
+  > _Insert a clear visual diagram illustrating:_
+  >
   > 1. Client A and Client B connected to Central Server over TCP (port 5000).
   > 2. TCP carrying control traffic: Chat messages, Room commands, File chunks, and Call signaling.
   > 3. Direct Peer-to-Peer UDP media transmission between Client A and Client B for Audio & Video calls.
 
 - **2.2 Protocol Framing & Specification**:
-  *Textual Detail*: Explain why TCP is a byte stream without native message boundaries, and why newline-delimited framing (`\n`) with pipe separators (`|`) was chosen. Explain how `partition("|")` and fixed-split rules prevent user text from breaking commands.
-  
-  *Include Protocol Tables*:
+  _Textual Detail_: Explain why TCP is a byte stream without native message boundaries, and why newline-delimited framing (`\n`) with pipe separators (`|`) was chosen. Explain how `partition("|")` and fixed-split rules prevent user text from breaking commands.
+
+  _Include Protocol Tables_:
   - **Client to Server**: `LOGIN|user`, `MSG|room|text`, `PM|user|text`, `JOIN|room`, `LEAVE|room`, `FILESTART`, `FILECHUNK`, `FILEEND`, `CALL|user|mode|aport|vport`, `ACCEPT|caller|aport|vport`, `REJECT|caller|reason`, `ENDCALL|other`.
   - **Server to Client**: `USERS|list`, `MSG|room|sender|text`, `PM|sender|text`, `INFO|msg`, `ERROR|msg`, `FILESTART|sender|...`, `INCOMING|caller|mode|ip|aport|vport`, `ACCEPTED|callee|ip|aport|vport`, `REJECT|callee|reason`, `ENDCALL|other`.
 
 ---
 
 ### CHAPTER 3: Server Design & Concurrency
+
 - **3.1 Accept Loop & Lifecycle Management**:
-  *Textual Detail*: Explain how `server.py` binds to `0.0.0.0:5000` with `SO_REUSEADDR`, listens for connections, and immediately starts a daemon thread `handle_client(sock, addr)` for each client.
-  *Textual Detail*: Emphasize the `try/finally` block ensuring users are automatically purged from `clientRegistry` and `roomManager` on disconnect or sudden network drops.
+  _Textual Detail_: Explain how `server.py` binds to `0.0.0.0:5000` with `SO_REUSEADDR`, listens for connections, and immediately starts a daemon thread `handle_client(sock, addr)` for each client.
+  _Textual Detail_: Emphasize the `try/finally` block ensuring users are automatically purged from `clientRegistry` and `roomManager` on disconnect or sudden network drops.
 
 - **3.2 Concurrency & Race Condition Prevention**:
-  *Textual Detail*: Explain how shared state is protected:
+  _Textual Detail_: Explain how shared state is protected:
   - `clients = {}` in `clientRegistry.py` protected by `threading.Lock()`.
   - `rooms = {}` in `roomManager.py` protected by `threading.Lock()`.
   - Snapshot broadcasting to eliminate deadlocks during network I/O.
@@ -184,7 +199,8 @@ When assembling your report document (Word/PDF), format each chapter following t
 
 - **3.3 Working Screenshot**:
   > **[GUI / TERMINAL SCREENSHOT 1: Active Server Daemon Console]**
-  > *Capture the running `server.py` console window showing:*
+  > _Capture the running `server.py` console window showing:_
+  >
   > - `Chat Server running on 0.0.0.0:5000`
   > - Multiple clients connecting (`[Connected] ('192.168.1.X', ...)`).
   > - Authenticated logins and clean disconnect logs.
@@ -192,18 +208,21 @@ When assembling your report document (Word/PDF), format each chapter following t
 ---
 
 ### CHAPTER 4: Client Architecture & GUI Layout
+
 - **4.1 Decoupled Modular Architecture**:
-  *Textual Detail*: Explain why UI widgets and network/media logic are strictly separated. The GUI only handles rendering and event capture; backend modules handle networking procedurally.
+  _Textual Detail_: Explain why UI widgets and network/media logic are strictly separated. The GUI only handles rendering and event capture; backend modules handle networking procedurally.
 
 - **4.2 Tkinter Thread-Safety via Event Queue**:
-  *Textual Detail*: Detail how background reader threads deposit network events into `queue.Queue()`, and `App._poll()` drains them via `root.after(100, self._poll)`.
+  _Textual Detail_: Detail how background reader threads deposit network events into `queue.Queue()`, and `App._poll()` drains them via `root.after(100, self._poll)`.
 
 - **4.3 Working Screenshots**:
+
   > **[GUI SCREENSHOT 2: Client Login Window]**
-  > *Show the login interface displaying Server Host, Port, Username entry field, and the "Connect" button.*
+  > _Show the login interface displaying Server Host, Port, Username entry field, and the "Connect" button._
 
   > **[GUI SCREENSHOT 3: Main Dashboard Overview]**
-  > *Show the full main page after successful login featuring:*
+  > _Show the full main page after successful login featuring:_
+  >
   > - Left Panel: Rooms list (`#general`), Join/Leave inputs, logged-in status.
   > - Center Panel: Header title, media toolbar buttons (`File`, `Voice Rec`, `Video Rec`, `Call Audio`, `Call Video`, `End Call`, `Settings`), chat history display, emoji picker button, and message input bar.
   > - Right Panel: Active `ONLINE` users list showing all connected clients.
@@ -211,74 +230,81 @@ When assembling your report document (Word/PDF), format each chapter following t
 ---
 
 ### CHAPTER 5: Messaging & Room Management
+
 - **5.1 Public Room Messaging & Isolation**:
-  *Textual Detail*: Walk through the life cycle of a message in `#general`. Explain how `roomManager.py` isolates messages so that users in `#study` never receive messages from other rooms.
+  _Textual Detail_: Walk through the life cycle of a message in `#general`. Explain how `roomManager.py` isolates messages so that users in `#study` never receive messages from other rooms.
 
 - **5.2 Private 1-to-1 Messaging (PM)**:
-  *Textual Detail*: Explain double-clicking an online user in the right list, switching the context to `@username`, and the server routing the `PM` exclusively to the intended recipient.
+  _Textual Detail_: Explain double-clicking an online user in the right list, switching the context to `@username`, and the server routing the `PM` exclusively to the intended recipient.
 
 - **5.3 Working Screenshots**:
+
   > **[GUI SCREENSHOT 4: Multi-Client Group Chat Session]**
-  > *Capture two client windows side-by-side chatting concurrently in `#general`.*
+  > _Capture two client windows side-by-side chatting concurrently in `#general`._
 
   > **[GUI SCREENSHOT 5: Custom Room Creation & Join]**
-  > *Show a user entering a new room name (e.g. `study`), clicking "Join", and chatting with room isolation.*
+  > _Show a user entering a new room name (e.g. `study`), clicking "Join", and chatting with room isolation._
 
   > **[GUI SCREENSHOT 6: 1-to-1 Private Chat Mode]**
-  > *Show a private chat session between two users with distinctive private message styling (`pm_bg` tint).*
+  > _Show a private chat session between two users with distinctive private message styling (`pm_bg` tint)._
 
   > **[GUI SCREENSHOT 7: Interactive Emoji Picker Popup]**
-  > *Show the emoji palette open above the composition bar, with emojis inserted into the message.*
+  > _Show the emoji palette open above the composition bar, with emojis inserted into the message._
 
 ---
 
 ### CHAPTER 6: File & Media Sharing
+
 - **6.1 Base64 Chunked File Streaming**:
-  *Textual Detail*: Explain why large files are split into 32 KB chunks and Base64-encoded to guarantee constant memory usage and smooth streaming through the socket pipeline.
+  _Textual Detail_: Explain why large files are split into 32 KB chunks and Base64-encoded to guarantee constant memory usage and smooth streaming through the socket pipeline.
 
 - **6.2 Audio & Video Recording Pipelines**:
-  *Textual Detail*: Explain procedural microphone capture to `recordings/voice.wav` via PyAudio, and webcam capture to `recordings/output_video.avi` via OpenCV.
+  _Textual Detail_: Explain procedural microphone capture to `recordings/voice.wav` via PyAudio, and webcam capture to `recordings/output_video.avi` via OpenCV.
 
 - **6.3 Working Screenshots**:
+
   > **[GUI SCREENSHOT 8: File Selection & Upload Progress]**
-  > *Show the system file chooser modal and the chat window displaying `Uploading file [filename] to [target]...`.*
+  > _Show the system file chooser modal and the chat window displaying `Uploading file [filename] to [target]...`._
 
   > **[GUI SCREENSHOT 9: File Download Confirmation & Storage]**
-  > *Show the receiving client's chat showing `File [filename] saved to downloads/`, along with the Windows Explorer window displaying the file inside `downloads/`.*
+  > _Show the receiving client's chat showing `File [filename] saved to downloads/`, along with the Windows Explorer window displaying the file inside `downloads/`._
 
   > **[GUI SCREENSHOT 10: Voice Recording Dialog in Action]**
-  > *Show the `Voice Recorder` popup window with `Recording...` status, and the `Saved!` / `Playing...` state with Start, Stop, and Play buttons.*
+  > _Show the `Voice Recorder` popup window with `Recording...` status, and the `Saved!` / `Playing...` state with Start, Stop, and Play buttons._
 
   > **[GUI SCREENSHOT 11: Video Clip Recording Dialog & Playback]**
-  > *Show the `Video Recorder` modal along with the OpenCV camera playback window (`Playback (Press q to close)`).*
+  > _Show the `Video Recorder` modal along with the OpenCV camera playback window (`Playback (Press q to close)`)._
 
 ---
 
 ### CHAPTER 7: Real-Time Audio & Video Calling
+
 - **7.1 Signaling vs. Direct Media Path**:
-  *Textual Detail*: Explain the distinction between signaling over TCP (via the server) and high-speed streaming over direct peer-to-peer UDP sockets.
+  _Textual Detail_: Explain the distinction between signaling over TCP (via the server) and high-speed streaming over direct peer-to-peer UDP sockets.
 
 - **7.2 Direct Peer-to-Peer UDP Pipeline**:
-  *Textual Detail*: Explain dynamic port allocation (`sock.bind(("", 0))`), frame compression (320x240, JPEG quality 40), and continuous UDP streaming between clients.
+  _Textual Detail_: Explain dynamic port allocation (`sock.bind(("", 0))`), frame compression (320x240, JPEG quality 40), and continuous UDP streaming between clients.
 
 - **7.3 Working Screenshots**:
+
   > **[GUI SCREENSHOT 12: Outgoing Call Initiation]**
-  > *Show Client A clicking "Call Video" or "Call Audio", with the chat header indicating `Calling [user] (Video)...`.*
+  > _Show Client A clicking "Call Video" or "Call Audio", with the chat header indicating `Calling [user] (Video)...`._
 
   > **[GUI SCREENSHOT 13: Incoming Call Accept/Reject Dialog]**
-  > *Show Client B displaying the modal dialog: `Incoming VIDEO call from [caller]. Accept?` with Yes / No options.*
+  > _Show Client B displaying the modal dialog: `Incoming VIDEO call from [caller]. Accept?` with Yes / No options._
 
   > **[GUI SCREENSHOT 14: Active 2-Way Live Video Call Window]**
-  > *Show the active OpenCV live video window rendering the real-time webcam stream over UDP.*
+  > _Show the active OpenCV live video window rendering the real-time webcam stream over UDP._
 
   > **[GUI SCREENSHOT 15: Clean Call Termination]**
-  > *Show the user clicking "End Call", the video window closing, and the chat status displaying `Call ended`.*
+  > _Show the user clicking "End Call", the video window closing, and the chat status displaying `Call ended`._
 
 ---
 
 ### CHAPTER 8: Testing, Verification & Results
+
 - **8.1 Verification Matrix**:
-  *Include the verified test table:*
+  _Include the verified test table:_
   | Test ID | Test Scenario | Expected Outcome | Result |
   |---|---|---|---|
   | T1 | Concurrent Server Logins | 3+ users online, lists synced | PASS |
@@ -292,28 +318,31 @@ When assembling your report document (Word/PDF), format each chapter following t
 
 - **8.2 Network Evidence**:
   > **[GUI / NETWORK SCREENSHOT 16: Wireshark Packet Trace]**
-  > *Capture a Wireshark session displaying:*
+  > _Capture a Wireshark session displaying:_
+  >
   > - Formatted TCP lines (`MSG|...`, `FILECHUNK|...`).
   > - Continuous high-throughput UDP packet flow between the two client IP addresses during an active call.
 
 ---
 
 ### CHAPTER 9: Settings, Graceful Exit & Limitations
+
 - **9.1 Settings & Network Diagnostics**:
-  *Textual Detail*: Explain the Settings modal displaying local username, remote server socket address, and network diagnostics.
+  _Textual Detail_: Explain the Settings modal displaying local username, remote server socket address, and network diagnostics.
 
 - **9.2 Graceful Teardown**:
-  *Textual Detail*: Explain window close event interception, closing background threads, terminating media streams, and disconnecting cleanly from the server.
+  _Textual Detail_: Explain window close event interception, closing background threads, terminating media streams, and disconnecting cleanly from the server.
 
 - **9.3 Working Screenshots**:
   > **[GUI SCREENSHOT 17: Settings Modal Dialog]**
-  > *Show the Settings dialog displaying the current Username and Server IP:Port connection details.*
+  > _Show the Settings dialog displaying the current Username and Server IP:Port connection details._
 
 ---
 
 ## Part 4: Presentation & Demo Guide
 
 ### 4.1 Slide Deck Structure (10-12 Slides)
+
 1. **Title Slide**: Project Name, Course Title, Student Names, Registration IDs.
 2. **Problem Statement & Objectives**: Why build custom sockets instead of relying on third-party frameworks.
 3. **High-Level Architecture**: Client-Server TCP Control vs. Peer-to-Peer UDP Media (Insert Architecture Diagram).
@@ -334,11 +363,11 @@ Follow this script during the viva examination:
 
 1. **Step 1: Launch the Server**
    - Run `python server.py`.
-   - Point out: *“The server binds to port 5000 and is now listening for incoming TCP client connections.”*
+   - Point out: _“The server binds to port 5000 and is now listening for incoming TCP client connections.”_
 
 2. **Step 2: Connect Multiple Clients**
    - Open Client 1 (`Alice`) and Client 2 (`Bob`).
-   - Point out: *“Notice how both windows instantly reflect each other in the Online Users list upon login.”*
+   - Point out: _“Notice how both windows instantly reflect each other in the Online Users list upon login.”_
 
 3. **Step 3: Group Chat & Room Creation**
    - Send messages in `#general`.
@@ -370,10 +399,10 @@ Follow this script during the viva examination:
 
 ### 4.3 Viva Defense Quick-Reference Cheat Sheet
 
-| Question | Winning Technical Answer |
-|---|---|
-| *Why use TCP for chat/files but UDP for calls?* | TCP guarantees ordering and packet delivery via acknowledgments and retransmissions, which text and files need. Audio/video calls require real-time playback where a dropped packet is preferable to blocking delays. |
-| *How do you prevent message corruption in TCP streams?* | Sockets transmit raw bytes, not discrete messages. We delimit messages using `\n` and protect all `sock.sendall()` calls with a per-connection `threading.Lock`. |
-| *How is the GUI kept responsive during file transfers?* | File I/O and transmission run on a dedicated worker thread. The thread deposits status updates into a `queue.Queue`, which Tkinter safely reads via `root.after()`. |
-| *How do clients connect for calls if the server doesn't relay media?* | The server acts purely as a signaling broker. The clients allocate local UDP ports, exchange their IP and port numbers over the existing TCP connection, and then stream UDP directly peer-to-peer. |
-| *What happens if a user crashes or closes unexpectedly?* | The server's `readline()` call returns an empty string `""`, triggering the `finally` block in `handle_client`. The user is cleanly purged from `clientRegistry` and all rooms, and a fresh `USERS` list is broadcast to remaining clients. |
+| Question                                                              | Winning Technical Answer                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _Why use TCP for chat/files but UDP for calls?_                       | TCP guarantees ordering and packet delivery via acknowledgments and retransmissions, which text and files need. Audio/video calls require real-time playback where a dropped packet is preferable to blocking delays.                       |
+| _How do you prevent message corruption in TCP streams?_               | Sockets transmit raw bytes, not discrete messages. We delimit messages using `\n` and protect all `sock.sendall()` calls with a per-connection `threading.Lock`.                                                                            |
+| _How is the GUI kept responsive during file transfers?_               | File I/O and transmission run on a dedicated worker thread. The thread deposits status updates into a `queue.Queue`, which Tkinter safely reads via `root.after()`.                                                                         |
+| _How do clients connect for calls if the server doesn't relay media?_ | The server acts purely as a signaling broker. The clients allocate local UDP ports, exchange their IP and port numbers over the existing TCP connection, and then stream UDP directly peer-to-peer.                                         |
+| _What happens if a user crashes or closes unexpectedly?_              | The server's `readline()` call returns an empty string `""`, triggering the `finally` block in `handle_client`. The user is cleanly purged from `clientRegistry` and all rooms, and a fresh `USERS` list is broadcast to remaining clients. |
