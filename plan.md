@@ -1,5 +1,8 @@
 # Project Documentation, Report & Presentation Master Plan
 
+Jeo 
+Saim
+
 This document provides a comprehensive, step-by-step master plan to prepare the **Final Project Report** and the **Final Project Presentation/Demo** for the **Real-Time Multi-User Socket- and Thread-Based Chat Application**.
 
 It details exact guidelines on:
